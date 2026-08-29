@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+kind=${1:-}
+case "$kind" in
+  device) variable=SPATIAL_DEVICE_TOKEN_FILE; fallback=./data/device.token ;;
+  mcp) variable=SPATIAL_MCP_TOKEN_FILE; fallback=./data/mcp.token ;;
+  *) printf 'usage: %s device|mcp [output-file]\n' "$0" >&2; exit 2 ;;
+esac
+
+output=${2:-$fallback}
+if [ -e "$output" ]; then
+  printf 'refusing to overwrite existing token file: %s\n' "$output" >&2
+  exit 1
+fi
+mkdir -p "$(dirname "$output")"
+umask 077
+python3 -c 'import secrets; print(secrets.token_urlsafe(48))' > "$output"
+printf 'created %s token at %s; set %s to this path\n' "$kind" "$output" "$variable"
