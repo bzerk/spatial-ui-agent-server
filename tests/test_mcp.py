@@ -22,15 +22,32 @@ async def test_official_mcp_registers_required_tools(settings) -> None:
     names = {tool.name for tool in tools}
     assert names == {
         "devices_list",
+        "device_surface_get",
         "surface_get_active",
         "surface_generate",
+        "surface_generate_and_push",
         "surface_put",
         "surface_push",
         "surface_reset",
+        "surface_source_get",
         "device_capture_camera",
         "device_capture_display",
         "device_speak",
     }
+
+    device_id = "rokid-source-test"
+    service.store.touch_device(device_id)
+    active = service.active_surface()
+    service.register_device_runtime(
+        device_id,
+        "downloaded",
+        "https://appassets.androidplatform.net/surface/test/index.html",
+        active["revision"],
+        None,
+    )
+    _, structured = await mcp.call_tool("device_surface_get", {"device_id": device_id})
+    assert structured["revision"] == active["revision"]
+    assert any(item["path"] == "index.html" for item in structured["files"])
 
 
 def test_streamable_http_requires_mcp_token_and_initializes(settings) -> None:

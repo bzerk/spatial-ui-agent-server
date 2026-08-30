@@ -28,6 +28,7 @@ dev = [
 [project.scripts]
 spatial-agent-server = "spatial_ui_agent_server.cli:main"
 spatial-agent-mcp = "spatial_ui_agent_server.mcp_server:main"
+spatial-agent-service = "spatial_ui_agent_server.service_manager:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/spatial_ui_agent_server"]
@@ -42,3 +43,6 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/spatial_ui_agent_server/admin_console.py" = ["E501"]

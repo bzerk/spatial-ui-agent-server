@@ -89,7 +89,12 @@ near-black backgrounds. No near-black substitutes,
 gradients, full-screen tinted layers, phone layouts, Material UI, pills, large cards, remote
 resources, or large emissive regions. Use compact 8-11px monospace typography, hairline
 outlines, sparse green accents, and precise focus markers. The page must include functional
-HTML, CSS, and JavaScript and support 3DOF yaw/pitch/roll events when useful. Maximum 128 files
+HTML, CSS, and JavaScript. For 3DOF, use window.rokid.spatial.subscribe(pose => ...) and consume
+pose.head for head-directed controls or pose.stage/worldToView() for world-fixed content. The
+container has already calibrated the Rokid landscape axes: do not swap/invert axes, derive a new
+Euler-to-quaternion conversion, or treat deviceorientation alpha as a WebXR Z rotation. Inline
+WebXR poses use the same canonical rokid.spatial.pose.v1 contract. HID pointer, mouse, wheel, and
+keyboard events are valid inputs; never require touchscreen gestures. Maximum 128 files
     and 8 MiB unpacked. Emit at most 127 content files; the server adds surface.json as the
     128th possible bundle entry. Do not emit surface.json; the server creates the immutable
     manifest.

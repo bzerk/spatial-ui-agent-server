@@ -4,27 +4,14 @@
 from __future__ import annotations
 
 import argparse
-import os
 import secrets
 import shutil
-import socket
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CLIENT = Path.home() / "AndroidStudioProjects" / "RokidWebXRShell"
 DEFAULT_WORKER = Path(shutil.which("arux-whisper-worker") or ROOT / "tools/arux-whisper-worker")
-DEFAULT_MODEL = (
-    Path.home() / "Library/Caches/spatial-ui-agent-server/models/ggml-base.en.bin"
-)
-
-
-def local_address() -> str:
-    override = os.getenv("SPATIAL_DEMO_ADDRESS")
-    if override:
-        return override
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
-        probe.connect(("1.1.1.1", 53))
-        return str(probe.getsockname()[0])
+DEFAULT_MODEL = Path.home() / "Library/Caches/spatial-ui-agent-server/models/ggml-base.en.bin"
 
 
 def token_at(path: Path) -> str:
@@ -39,8 +26,9 @@ def token_at(path: Path) -> str:
     return path.read_text(encoding="utf-8").strip()
 
 
-def write_server_env(address: str, port: int, worker: Path, model: Path) -> None:
+def write_server_env(port: int, worker: Path, model: Path) -> None:
     data = ROOT / "data"
+    log_file = Path.home() / "Library" / "Logs" / "SpatialUIAgent" / "server.log"
     device_token = data / "device.token"
     mcp_token = data / "mcp.token"
     token_at(device_token)
@@ -48,15 +36,19 @@ def write_server_env(address: str, port: int, worker: Path, model: Path) -> None
     codex = shutil.which("codex") or "codex"
     lines = [
         f"SPATIAL_DATA_DIR={data}",
+        f"SPATIAL_LOG_FILE={log_file}",
+        "SPATIAL_LOG_MAX_BYTES=5242880",
+        "SPATIAL_LOG_BACKUP_COUNT=3",
         "SPATIAL_HOST=0.0.0.0",
         f"SPATIAL_PORT={port}",
-        f"SPATIAL_PUBLIC_BASE_URL=http://{address}:{port}",
         f"SPATIAL_DEVICE_TOKEN_FILE={device_token}",
         f"SPATIAL_MCP_TOKEN_FILE={mcp_token}",
         "SPATIAL_MCP_ALLOWLIST=127.0.0.1,::1",
-        "SPATIAL_MDNS_ENABLED=true",
+        "SPATIAL_MDNS_ENABLED=false",
         'SPATIAL_MDNS_NAME="Rokid Spatial Agent"',
-        f"SPATIAL_MDNS_ADDRESS={address}",
+        "SPATIAL_MDNS_ADDRESS=",
+        "SPATIAL_LAN_DISCOVERY_ENABLED=true",
+        "SPATIAL_LAN_DISCOVERY_PORT=8767",
         f"SPATIAL_TRANSCRIBER_BIN={worker}",
         "SPATIAL_TRANSCRIBER_FALLBACK_BIN=",
         f"SPATIAL_WHISPER_MODEL={model}",
@@ -70,7 +62,7 @@ def write_server_env(address: str, port: int, worker: Path, model: Path) -> None
     (ROOT / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def write_client_properties(client: Path, address: str, port: int) -> None:
+def write_client_properties(client: Path) -> None:
     token = token_at(ROOT / "data/device.token")
     sdk = Path.home() / "Library/Android/sdk"
     path = client / "local.properties"
@@ -83,7 +75,7 @@ def write_client_properties(client: Path, address: str, port: int) -> None:
     existing.update(
         {
             "sdk.dir": str(sdk),
-            "WEBXR_SERVICE_BASE_URL": f"http://{address}:{port}",
+            "WEBXR_SERVICE_BASE_URL": "",
             "WEBXR_SERVICE_TOKEN": token,
             "WEBXR_DEVICE_ID": existing.get("WEBXR_DEVICE_ID", ""),
         }
@@ -95,21 +87,20 @@ def write_client_properties(client: Path, address: str, port: int) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--address", default=None, help="LAN address advertised to glasses")
     parser.add_argument("--port", type=int, default=8766)
     parser.add_argument("--client", type=Path, default=DEFAULT_CLIENT)
     parser.add_argument("--worker", type=Path, default=DEFAULT_WORKER)
     parser.add_argument("--model", type=Path, default=DEFAULT_MODEL)
     args = parser.parse_args()
-    address = args.address or local_address()
     required = {"client": args.client, "transcriber": args.worker, "model": args.model}
     missing = [f"{name}: {path}" for name, path in required.items() if not path.exists()]
     if missing:
         raise SystemExit("Missing required path(s):\n" + "\n".join(missing))
-    write_server_env(address, args.port, args.worker.resolve(), args.model.resolve())
-    write_client_properties(args.client.resolve(), address, args.port)
-    print(f"Configured laptop-local demo at http://{address}:{args.port}")
+    write_server_env(args.port, args.worker.resolve(), args.model.resolve())
+    write_client_properties(args.client.resolve())
+    print(f"Configured address-free laptop discovery on UDP 8767 -> HTTP {args.port}")
     print("Device and MCP credentials were written to ignored, mode-0600 files.")
+    print("Install the persistent laptop service with: ./scripts/service install")
 
 
 if __name__ == "__main__":

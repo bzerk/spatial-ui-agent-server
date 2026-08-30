@@ -5,6 +5,7 @@ import json
 import tempfile
 import time
 import uuid
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -61,15 +62,95 @@ class SpatialService:
         row["manifest"] = json.loads(row.pop("manifest_json"))
         return row
 
+    def surface_source(self, revision: str) -> dict[str, Any]:
+        surface = self.surface(revision)
+        if not surface:
+            raise ValueError("unknown surface revision")
+        manifest = surface["manifest"]
+        files: list[dict[str, str]] = []
+        with zipfile.ZipFile(surface["zip_path"]) as archive:
+            for name in sorted(manifest["files"]):
+                files.append({"path": name, "content": archive.read(name).decode("utf-8")})
+        return {
+            "revision": revision,
+            "source": surface["source"],
+            "manifest": manifest,
+            "files": files,
+        }
+
+    def devices(self) -> list[dict[str, Any]]:
+        result = self.store.all("SELECT * FROM devices ORDER BY last_seen DESC")
+        for item in result:
+            item["metadata"] = json.loads(item.pop("metadata_json", "{}"))
+        return result
+
+    def device_surface(self, device_id: str) -> dict[str, Any]:
+        device = self.store.one("SELECT * FROM devices WHERE id=?", (device_id,))
+        if not device:
+            raise ValueError("unknown device")
+        metadata = json.loads(device.pop("metadata_json", "{}"))
+        revision = metadata.get("loaded_surface_revision")
+        if not revision:
+            raise ValueError("device has not reported a loaded surface")
+        return {"device": device | {"metadata": metadata}, **self.surface_source(revision)}
+
+    def register_device_runtime(
+        self,
+        device_id: str,
+        source_kind: str,
+        url: str,
+        revision: str | None,
+        files: list[dict[str, str]] | None,
+    ) -> dict[str, Any]:
+        if files:
+            if len(files) > 127 or not all(
+                isinstance(item, dict)
+                and isinstance(item.get("path"), str)
+                and isinstance(item.get("content"), str)
+                for item in files
+            ):
+                raise ValueError("runtime snapshot files are invalid")
+            manifest = self.put_surface(files, source=f"device:{device_id}:{source_kind}")
+            revision = manifest["revision"]
+        elif not revision or not self.surface(revision):
+            raise ValueError("runtime revision is not available on the server")
+        source = self.surface(revision)
+        self.store.update_device_metadata(
+            device_id,
+            {
+                "loaded_surface_revision": revision,
+                "loaded_surface_source": source_kind,
+                "loaded_surface_url": url[:500],
+                "loaded_surface_reported_at": time.time(),
+            },
+        )
+        return {"revision": revision, "manifest": source["manifest"] if source else {}}
+
     async def generate_surface(
         self,
         request: str,
         image_path: Path | None = None,
         context: dict[str, Any] | None = None,
         on_checking: Any = None,
+        device_id: str | None = None,
+        base_revision: str | None = None,
     ) -> dict[str, Any]:
-        active = self.active_surface()
-        source = read_surface_source(Path(active["zip_path"]))
+        source: str
+        if base_revision:
+            active = self.surface(base_revision)
+            if not active:
+                raise ValueError("unknown base surface revision")
+            source = read_surface_source(Path(active["zip_path"]))
+        elif device_id:
+            snapshot = self.device_surface(device_id)
+            source = "".join(
+                f"\n/* {item['path']} */\n{item['content']}"
+                for item in snapshot["files"]
+                if Path(item["path"]).suffix.lower() in {".html", ".css", ".js"}
+            )
+        else:
+            active = self.active_surface()
+            source = read_surface_source(Path(active["zip_path"]))
         candidate = self.scratch_dir / f"generated-{uuid.uuid4()}"
         context_note = (
             f"\nDevice context: {json.dumps(context, separators=(',', ':'))[:4000]}"
@@ -146,7 +227,11 @@ class SpatialService:
 
             generation = asyncio.create_task(
                 self.generate_surface(
-                    transcript or "Show the default constellation", image, context, checking
+                    transcript or "Show the default constellation",
+                    image,
+                    context,
+                    checking,
+                    device_id=turn["device_id"],
                 )
             )
             try:

@@ -58,3 +58,24 @@ async def test_successful_turn_queues_surface_then_speech(settings, monkeypatch)
     }
     assert events[-1]["payload"]["status"] == "ready"
     assert service.store.one("SELECT status FROM turns WHERE id=?", (turn_id,))["status"] == "ready"
+
+
+def test_device_runtime_snapshot_round_trip(settings) -> None:
+    service = SpatialService(settings)
+    service.initialize()
+    device_id = "rokid-runtime-source"
+    service.store.touch_device(device_id)
+    source = service.surface_source(service.active_surface()["revision"])
+
+    accepted = service.register_device_runtime(
+        device_id,
+        "bundled-default",
+        "https://appassets.androidplatform.net/assets/shell/index.html",
+        None,
+        source["files"],
+    )
+    loaded = service.device_surface(device_id)
+
+    assert loaded["revision"] == accepted["revision"]
+    assert loaded["device"]["metadata"]["loaded_surface_source"] == "bundled-default"
+    assert loaded["files"] == service.surface_source(accepted["revision"])["files"]

@@ -3,6 +3,7 @@ from __future__ import annotations
 import uvicorn
 
 from .config import Settings
+from .logging_config import build_logging_config
 
 
 def main() -> None:
@@ -12,6 +13,7 @@ def main() -> None:
         host=settings.host,
         port=settings.port,
         log_level="info",
+        log_config=build_logging_config(settings),
     )
 
 

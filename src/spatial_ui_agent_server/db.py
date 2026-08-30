@@ -141,6 +141,22 @@ class Store:
             (device_id, now()),
         )
 
+    def update_device_metadata(self, device_id: str, values: dict[str, Any]) -> dict[str, Any]:
+        with self._write_lock, self.connect() as db:
+            row = db.execute(
+                "SELECT metadata_json FROM devices WHERE id=?", (device_id,)
+            ).fetchone()
+            metadata = json.loads(row["metadata_json"]) if row else {}
+            metadata.update(values)
+            timestamp = now()
+            db.execute(
+                "INSERT INTO devices(id,last_seen,metadata_json) VALUES(?,?,?) "
+                "ON CONFLICT(id) DO UPDATE SET last_seen=excluded.last_seen, "
+                "metadata_json=excluded.metadata_json",
+                (device_id, timestamp, json.dumps(metadata, separators=(",", ":"))),
+            )
+            return {"id": device_id, "last_seen": timestamp, "metadata": metadata}
+
     def append_event(
         self,
         event_id: str,

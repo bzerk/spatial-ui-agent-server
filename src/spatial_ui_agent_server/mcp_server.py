@@ -14,13 +14,17 @@ def build_mcp(service: SpatialService) -> FastMCP:
         "Rokid Spatial UI Agent",
         json_response=True,
         streamable_http_path="/mcp",
-        instructions="Operate local Rokid devices and immutable spatial.surface.v1 revisions.",
+        instructions=(
+            "Operate local Rokid devices and immutable spatial.surface.v1 revisions. "
+            "Before changing a live device, call device_surface_get so edits use the exact "
+            "surface reported by that device, then put or generate and push the new revision."
+        ),
     )
 
     @mcp.tool()
     def devices_list() -> list[dict[str, Any]]:
-        """List known devices and their latest seen timestamp."""
-        return service.store.all("SELECT * FROM devices ORDER BY last_seen DESC")
+        """List known devices, latest seen time, and reported loaded surface metadata."""
+        return service.devices()
 
     @mcp.tool()
     def surface_get_active() -> dict[str, Any]:
@@ -28,9 +32,35 @@ def build_mcp(service: SpatialService) -> FastMCP:
         return service.active_surface()["manifest"]
 
     @mcp.tool()
-    async def surface_generate(request: str) -> dict[str, Any]:
-        """Generate, validate, store, and activate a new surface."""
-        return await service.generate_surface(request)
+    def surface_source_get(revision: str) -> dict[str, Any]:
+        """Return the exact UTF-8 files and manifest for an immutable revision."""
+        return service.surface_source(revision)
+
+    @mcp.tool()
+    def device_surface_get(device_id: str) -> dict[str, Any]:
+        """Return the exact source most recently reported as loaded by a device."""
+        return service.device_surface(device_id)
+
+    @mcp.tool()
+    async def surface_generate(
+        request: str,
+        device_id: str | None = None,
+        base_revision: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate and store a surface from a device's exact source or a named revision."""
+        return await service.generate_surface(
+            request, device_id=device_id, base_revision=base_revision
+        )
+
+    @mcp.tool()
+    async def surface_generate_and_push(device_id: str, request: str) -> dict[str, Any]:
+        """Modify the source loaded by a device, then queue the validated revision to it."""
+        generated = await service.generate_surface(request, device_id=device_id)
+        revision = generated["manifest"]["revision"]
+        return {
+            **generated,
+            "event": service.push_surface(device_id, revision),
+        }
 
     @mcp.tool()
     def surface_put(files: list[dict[str, str]]) -> dict[str, Any]:

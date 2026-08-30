@@ -13,15 +13,19 @@ def _bool(name: str, default: bool) -> bool:
 @dataclass(frozen=True)
 class Settings:
     data_dir: Path
+    log_file: Path
+    log_max_bytes: int
+    log_backup_count: int
     host: str
     port: int
-    public_base_url: str
     device_token_file: Path
     mcp_token_file: Path
     mcp_allowlist: tuple[str, ...]
     mdns_enabled: bool
     mdns_name: str
     mdns_address: str | None
+    lan_discovery_enabled: bool
+    lan_discovery_port: int
     transcriber_bin: Path
     transcriber_fallback_bin: Path | None
     whisper_model: Path
@@ -38,11 +42,11 @@ class Settings:
         fallback = os.getenv("SPATIAL_TRANSCRIBER_FALLBACK_BIN", "")
         return cls(
             data_dir=data_dir,
+            log_file=Path(os.getenv("SPATIAL_LOG_FILE", str(data_dir / "server.log"))).expanduser(),
+            log_max_bytes=int(os.getenv("SPATIAL_LOG_MAX_BYTES", str(5 * 1024 * 1024))),
+            log_backup_count=int(os.getenv("SPATIAL_LOG_BACKUP_COUNT", "3")),
             host=os.getenv("SPATIAL_HOST", "0.0.0.0"),
             port=int(os.getenv("SPATIAL_PORT", "8765")),
-            public_base_url=os.getenv("SPATIAL_PUBLIC_BASE_URL", "http://localhost:8765").rstrip(
-                "/"
-            ),
             device_token_file=Path(
                 os.getenv("SPATIAL_DEVICE_TOKEN_FILE", str(data_dir / "device.token"))
             ).expanduser(),
@@ -57,6 +61,8 @@ class Settings:
             mdns_enabled=_bool("SPATIAL_MDNS_ENABLED", True),
             mdns_name=os.getenv("SPATIAL_MDNS_NAME", "Rokid Spatial Agent"),
             mdns_address=os.getenv("SPATIAL_MDNS_ADDRESS") or None,
+            lan_discovery_enabled=_bool("SPATIAL_LAN_DISCOVERY_ENABLED", True),
+            lan_discovery_port=int(os.getenv("SPATIAL_LAN_DISCOVERY_PORT", "8767")),
             transcriber_bin=Path(
                 os.getenv("SPATIAL_TRANSCRIBER_BIN", "arux-whisper-worker")
             ).expanduser(),

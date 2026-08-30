@@ -8,6 +8,12 @@ voice turns, keeps a persistent local Whisper worker warm when configured, gener
 HTML/CSS/JS surfaces with Codex CLI, validates and stores immutable `spatial.surface.v1` bundles,
 and delivers commands over replayable device WebSockets. SQLite is the durable authority.
 
+The complete runtime is laptop-owned. It has no Axiom, Tailscale, hosted router, or public-ingress
+dependency. The glasses connect directly to this server over the current private LAN using mDNS or
+an address-free UDP discovery probe. The client derives the HTTP endpoint from the responder's
+packet source, so DHCP and switching between home Wi-Fi and a MiFi do not require rebuilding the
+APK. MCP clients and Codex also run locally on, or connect directly to, this laptop.
+
 ## Setup
 
 Requires Python 3.11+, `uv`, and Codex CLI authentication.
@@ -31,8 +37,9 @@ For a laptop-local Rokid demo, configure this server and a sibling client withou
 credentials on the command line:
 
 ```sh
-uv run scripts/configure_demo.py --address YOUR_LAPTOP_LAN_IP
-./scripts/run
+uv run scripts/configure_demo.py
+./scripts/service install
+./scripts/service open
 ```
 
 The configurator creates ignored mode-0600 token files, writes this repository's ignored `.env`,
@@ -41,17 +48,33 @@ and updates the client's ignored `local.properties`. It defaults to
 `PATH`, and the official cached `ggml-base.en` model. Override those paths with command-line flags
 when needed.
 
-Set `SPATIAL_MDNS_ADDRESS` and `SPATIAL_PUBLIC_BASE_URL` to the laptop interface reachable by the
-glasses. Addresses are intentionally not tracked because DHCP/interface state can change.
+The normal path has no configured laptop address. The server listens for
+`SPATIAL_UI_DISCOVER_V1` on UDP `8767` and replies with only its protocol and HTTP port; the glasses
+use the packet source as the host. UDP discovery is the portable demo default because stale mDNS
+interface state can survive a Wi-Fi change on macOS. mDNS remains available as an opt-in
+standards-based path. An explicit `SPATIAL_MDNS_ADDRESS` is a diagnostic override, not a demo
+requirement.
+
+The LaunchAgent starts at login, restarts after failure, and does not depend on an agent terminal
+remaining open. Lifecycle commands are:
 
 ```sh
-./scripts/run
-curl http://127.0.0.1:8766/health
+./scripts/service status
+./scripts/service restart
+./scripts/service logs
+./scripts/service stop
+./scripts/service start
 ```
 
-The admin page is available only from the server's loopback interface at
-`http://127.0.0.1:8766/admin`. Device routes require the device bearer token. MCP uses a distinct
-token and source allowlist.
+`./scripts/run` remains the foreground development command. The application log rotates at
+`~/Library/Logs/SpatialUIAgent/server.log`; launchd stdout and stderr are in the same directory.
+
+The operator console is available only from the server's loopback interface at
+`http://127.0.0.1:8766/admin`. It shows live health, devices, turns, delivery acknowledgements,
+generation jobs, and the rotating log. It can generate and push a surface, re-push the active
+surface, reset either fixture, request camera/display capture, and queue device speech. Mutations
+require a process-local CSRF token embedded in the loopback page. Device routes require the device
+bearer token; MCP uses a distinct token and source allowlist.
 
 ## Device API
 
@@ -64,13 +87,16 @@ token and source allowlist.
   Emitted events follow `spatial.event.v1` and use `turn.status`, `surface.available`, or
   `device.command`. Clients acknowledge with `spatial.ack.v1`; valid states are `downloaded`,
   `loaded`, `rendered`, and `failed`.
+  A client also sends `spatial.runtime.snapshot.v1` after each page load. Bundled content includes
+  its exact UTF-8 source files; downloaded content reports its immutable revision. The server
+  replies with `spatial.runtime.snapshot.accepted.v1` only after that source is available to MCP.
 - `GET /health`: dependency and active-revision status without secret values.
 
 Example turn:
 
 ```sh
 curl -H "Authorization: Bearer $DEVICE_TOKEN" \
-  -F event_id=demo-001 -F device_id=rokid-demo \
+  -F event_id=8e41232b-9df6-42ef-8bf4-ad03fe82fcaf -F device_id=rokid-demo \
   -F audio=@turn.wav -F photo=@view.jpg -F 'context={"capabilities":{}}' \
   http://127.0.0.1:8766/v1/turns
 ```
@@ -87,6 +113,9 @@ On the tested Rokid WebView, transparent root layers and clear canvases produce 
 opaque CSS `#000000` produced a measurable compositor floor and is intentionally rejected.
 
 Built-ins are a default 3DOF constellation and a yaw-controlled brick-breaker fixture.
+Generated surfaces receive `window.rokid.spatial`, whose calibrated `head`, world-to-view `stage`,
+`worldToView()`, and `parallax()` values preserve the known-good Obsidian axis convention. Inline
+WebXR uses the same pose contract instead of interpreting browser `alpha` as a Z-axis yaw.
 
 ## MCP
 
@@ -96,8 +125,12 @@ The official MCP Python SDK serves Streamable HTTP at `/mcp` and stdio through:
 ./scripts/run-mcp-stdio
 ```
 
-Tools: `devices_list`, `surface_get_active`, `surface_generate`, `surface_put`, `surface_push`,
-`surface_reset`, `device_capture_camera`, `device_capture_display`, and `device_speak`. Successful
+Tools: `devices_list`, `device_surface_get`, `surface_get_active`, `surface_source_get`,
+`surface_generate`, `surface_generate_and_push`, `surface_put`, `surface_push`, `surface_reset`,
+`device_capture_camera`, `device_capture_display`, and `device_speak`. The intended live-edit flow
+is `device_surface_get` first, then either edit and `surface_put` plus `surface_push`, or call
+`surface_generate_and_push` to generate directly from the exact source reported by that device.
+Successful
 turn generation preserves a short speech-safe Codex summary and queues it after
 `surface.available` as an idempotent `device.command` with `command: "speak"`; code and
 display-only content are never used as speech text.
