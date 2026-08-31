@@ -118,7 +118,10 @@ def validate_surface(root: Path) -> list[str]:
         r"\bimport\s*(?:\(|[^;]*?from\s*)['\"](?:https?:)?//",
         lowered,
     ):
-        errors.append("remote resources are forbidden")
+        errors.append(
+            "remote resources are forbidden by the current surface contract; "
+            "see docs/NETWORK_CAPABILITIES.md"
+        )
     if re.search(r"\b(?:eval|new\s+function)\s*\(", lowered):
         errors.append("dynamic JavaScript evaluation is forbidden")
     if (

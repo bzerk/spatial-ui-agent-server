@@ -87,9 +87,13 @@ transparent: keep html, body, canvas, and every full-viewport layer transparent.
 canvases with clearRect and WebGL with clearColor(0,0,0,0). Never paint opaque black or
 near-black backgrounds. No near-black substitutes,
 gradients, full-screen tinted layers, phone layouts, Material UI, pills, large cards, remote
-resources, or large emissive regions. Use compact 8-11px monospace typography, hairline
-outlines, sparse green accents, and precise focus markers. The page must include functional
-HTML, CSS, and JavaScript. For 3DOF, use window.rokid.spatial.subscribe(pose => ...) and consume
+embedded scripts, styles, frames, imports, assets, or large emissive regions. This generator has
+no trusted live-data connector. If a request depends on current remote data that is not supplied in
+the request or current source, do not invent it or claim that it is live; render an explicit
+unavailable or stale-data state while preserving a useful interface shell. Use compact 8-11px
+monospace typography, hairline outlines, sparse green accents, and precise focus markers. The page
+must include functional HTML, CSS, and JavaScript. For 3DOF, use
+window.rokid.spatial.subscribe(pose => ...) and consume
 pose.head for head-directed controls or pose.stage/worldToView() for world-fixed content. The
 container has already calibrated the Rokid landscape axes: do not swap/invert axes, derive a new
 Euler-to-quaternion conversion, or treat deviceorientation alpha as a WebXR Z rotation. Inline

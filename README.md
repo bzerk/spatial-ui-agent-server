@@ -117,6 +117,20 @@ Generated surfaces receive `window.rokid.spatial`, whose calibrated `head`, worl
 `worldToView()`, and `parallax()` values preserve the known-good Obsidian axis convention. Inline
 WebXR uses the same pose contract instead of interpreting browser `alpha` as a Z-axis yaw.
 
+## External Content and Live Data
+
+The self-contained bundle rule is a deliberate current capability boundary, not a claim that useful
+spatial applications should never access the network. Today the validator rejects remote embedded
+scripts, styles, frames, imports, and asset URLs. Direct runtime HTTPS may technically work under
+normal WebView and CORS rules, but it has no manifest policy, credential broker, freshness model,
+or client-side allowlist and is not a supported contract.
+
+Consequently, a generated surface may display data supplied with its request, but it must not
+invent or imply live document contents, printer telemetry, market prices, or other current data.
+Those use cases require a trusted server-side connector or a future declared network capability.
+See [Network Capabilities and External Resources](docs/NETWORK_CAPABILITIES.md) for the exact
+current behavior, security rationale, examples, and intended asset-import/data-channel design.
+
 ## MCP
 
 The official MCP Python SDK serves Streamable HTTP at `/mcp` and stdio through:
