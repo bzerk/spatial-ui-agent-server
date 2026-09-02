@@ -101,6 +101,19 @@ curl -H "Authorization: Bearer $DEVICE_TOKEN" \
   http://127.0.0.1:8766/v1/turns
 ```
 
+## Rokid UI Guidelines
+
+[`docs/ROKID_UI_GUIDELINES.md`](docs/ROKID_UI_GUIDELINES.md) is the canonical, versioned design and
+runtime guide for every generated or manually authored surface. It covers the measured viewport and
+safe area, transparent optical-black compositing, comfortable horizon placement, visual density,
+input assumptions, calibrated 3DOF/WebXR use, camera ownership, connected-data honesty, and package
+limits.
+
+The built-in generator injects that exact document automatically. External MCP agents must call
+`surface_guidelines_get`, author against the returned text, and pass its SHA-256 to `surface_put`.
+This makes the server the source of design rules instead of relying on the caller's private prompt.
+Every generated manifest records the guideline ID, version, and digest under `designGuidelines`.
+
 ## Surface Contract
 
 Every ZIP includes server-generated `surface.json` with schema `spatial.surface.v1`, immutable
@@ -139,11 +152,13 @@ The official MCP Python SDK serves Streamable HTTP at `/mcp` and stdio through:
 ./scripts/run-mcp-stdio
 ```
 
-Tools: `devices_list`, `device_surface_get`, `surface_get_active`, `surface_source_get`,
-`surface_generate`, `surface_generate_and_push`, `surface_put`, `surface_push`, `surface_reset`,
-`device_capture_camera`, `device_capture_display`, and `device_speak`. The intended live-edit flow
-is `device_surface_get` first, then either edit and `surface_put` plus `surface_push`, or call
-`surface_generate_and_push` to generate directly from the exact source reported by that device.
+Tools: `surface_guidelines_get`, `devices_list`, `device_surface_get`, `surface_get_active`,
+`surface_source_get`, `surface_generate`, `surface_generate_and_push`, `surface_put`,
+`surface_push`, `surface_reset`, `device_capture_camera`, `device_capture_display`, and
+`device_speak`. The intended external-agent live-edit flow is `surface_guidelines_get`, then
+`device_surface_get`, then `surface_put` with `guidelines_sha256`, followed by `surface_push`.
+Alternatively, call `surface_generate_and_push` to use the server's guide-backed generator directly
+against the exact source reported by that device.
 Successful
 turn generation preserves a short speech-safe Codex summary and queues it after
 `surface.available` as an idempotent `device.command` with `command: "speak"`; code and

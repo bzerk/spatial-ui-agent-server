@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import Settings
+from .guidelines import surface_guidelines_document
 from .surfaces import SurfaceValidationError, materialize_generated, validate_surface
 
 OUTPUT_SCHEMA = {
@@ -74,34 +75,20 @@ class CodexGenerator:
 
     def _prompt(self, request: str, current_source: str, errors: list[str]) -> str:
         repair = "\nValidator errors to repair exactly:\n- " + "\n- ".join(errors) if errors else ""
+        guidelines = surface_guidelines_document()
         return f"""Create a complete local HTML/CSS/JS Rokid spatial surface for: {request}
+
+Follow the complete Rokid UI guide below. It is authoritative over generic web, mobile, and
+desktop design conventions. Guide ID {guidelines["id"]}, version {guidelines["version"]}, SHA-256
+{guidelines["sha256"]}.
+
+--- BEGIN ROKID UI GUIDELINES ---
+{guidelines["text"]}
+--- END ROKID UI GUIDELINES ---
 
 Return only the output matching the supplied JSON schema. Each file must be UTF-8 text.
 Summary must be one short, speech-friendly sentence of at most 160 characters describing the
 result. Do not put code, markup, URLs, filenames, controls, or display-only details in summary.
-The physical Android bitmap is 480x640, but the WebView CSS viewport is exactly 320x427 at
-devicePixelRatio 1.5. Use width:100vw and height:100vh, never a fixed 480px by 640px CSS page.
-Keep important content inside the centered 266x381 CSS-pixel safe area with insets left 27,
-top 23, right 27, bottom 23. Optical black on this Rokid WebView is
-transparent: keep html, body, canvas, and every full-viewport layer transparent. Clear 2D
-canvases with clearRect and WebGL with clearColor(0,0,0,0). Never paint opaque black or
-near-black backgrounds. No near-black substitutes,
-gradients, full-screen tinted layers, phone layouts, Material UI, pills, large cards, remote
-embedded scripts, styles, frames, imports, assets, or large emissive regions. This generator has
-no trusted live-data connector. If a request depends on current remote data that is not supplied in
-the request or current source, do not invent it or claim that it is live; render an explicit
-unavailable or stale-data state while preserving a useful interface shell. Use compact 8-11px
-monospace typography, hairline outlines, sparse green accents, and precise focus markers. The page
-must include functional HTML, CSS, and JavaScript. For 3DOF, use
-window.rokid.spatial.subscribe(pose => ...) and consume
-pose.head for head-directed controls or pose.stage/worldToView() for world-fixed content. The
-container has already calibrated the Rokid landscape axes: do not swap/invert axes, derive a new
-Euler-to-quaternion conversion, or treat deviceorientation alpha as a WebXR Z rotation. Inline
-WebXR poses use the same canonical rokid.spatial.pose.v1 contract. HID pointer, mouse, wheel, and
-keyboard events are valid inputs; never require touchscreen gestures. Maximum 128 files
-    and 8 MiB unpacked. Emit at most 127 content files; the server adds surface.json as the
-    128th possible bundle entry. Do not emit surface.json; the server creates the immutable
-    manifest.
 
 Current active source, provided only as continuity context:
 ---

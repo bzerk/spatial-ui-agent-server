@@ -6,9 +6,11 @@ import sys
 import pytest
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from mcp.server.fastmcp.exceptions import ToolError
 from starlette.testclient import TestClient
 
 from spatial_ui_agent_server.api import create_app
+from spatial_ui_agent_server.guidelines import surface_guidelines_metadata
 from spatial_ui_agent_server.mcp_server import build_mcp
 from spatial_ui_agent_server.service import SpatialService
 
@@ -26,6 +28,7 @@ async def test_official_mcp_registers_required_tools(settings) -> None:
         "surface_get_active",
         "surface_generate",
         "surface_generate_and_push",
+        "surface_guidelines_get",
         "surface_put",
         "surface_push",
         "surface_reset",
@@ -34,6 +37,36 @@ async def test_official_mcp_registers_required_tools(settings) -> None:
         "device_capture_display",
         "device_speak",
     }
+
+    _, guidelines = await mcp.call_tool("surface_guidelines_get", {})
+    assert guidelines["id"] == "rokid.ui.webxr.v1"
+    assert guidelines["version"] == "2026-09-02"
+    assert guidelines["sha256"] == surface_guidelines_metadata()["sha256"]
+    assert "Optical Black and Compositing" in guidelines["text"]
+
+    _, stored = await mcp.call_tool(
+        "surface_put",
+        {
+            "guidelines_sha256": guidelines["sha256"],
+            "files": [
+                {
+                    "path": "index.html",
+                    "content": (
+                        '<html><meta name="viewport" content="width=device-width">'
+                        "<style>html,body{background:transparent}</style>"
+                        "<script>let yaw=0;</script></html>"
+                    ),
+                }
+            ],
+        },
+    )
+    assert stored["designGuidelines"] == surface_guidelines_metadata()
+
+    with pytest.raises(ToolError, match="surface_guidelines_get"):
+        await mcp.call_tool(
+            "surface_put",
+            {"files": [], "guidelines_sha256": "0" * 64},
+        )
 
     device_id = "rokid-source-test"
     service.store.touch_device(device_id)

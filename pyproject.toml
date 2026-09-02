@@ -33,6 +33,9 @@ spatial-agent-service = "spatial_ui_agent_server.service_manager:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/spatial_ui_agent_server"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"docs/ROKID_UI_GUIDELINES.md" = "spatial_ui_agent_server/resources/ROKID_UI_GUIDELINES.md"
+
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]

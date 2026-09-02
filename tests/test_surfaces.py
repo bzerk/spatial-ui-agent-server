@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from spatial_ui_agent_server.guidelines import surface_guidelines_metadata
 from spatial_ui_agent_server.surfaces import (
     SurfaceValidationError,
     package_surface,
@@ -37,6 +38,7 @@ def test_package_is_immutable_and_self_describing(tmp_path: Path) -> None:
     assert manifest["viewport"]["cssPixels"] == [320, 427]
     assert manifest["viewport"]["devicePixelRatio"] == 1.5
     assert manifest["backgroundMode"] == "transparent-ar"
+    assert manifest["designGuidelines"] == surface_guidelines_metadata()
     assert len(manifest["files"]["index.html"]) == 64
 
 

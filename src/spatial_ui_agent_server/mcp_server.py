@@ -6,6 +6,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from .config import Settings
+from .guidelines import surface_guidelines_document
 from .service import SpatialService
 
 
@@ -16,10 +17,17 @@ def build_mcp(service: SpatialService) -> FastMCP:
         streamable_http_path="/mcp",
         instructions=(
             "Operate local Rokid devices and immutable spatial.surface.v1 revisions. "
+            "Before authoring or uploading surface files, call surface_guidelines_get and follow "
+            "the returned canonical guide. "
             "Before changing a live device, call device_surface_get so edits use the exact "
             "surface reported by that device, then put or generate and push the new revision."
         ),
     )
+
+    @mcp.tool()
+    def surface_guidelines_get() -> dict[str, Any]:
+        """Return the canonical Rokid UI guide, version, and SHA-256 for surface authoring."""
+        return surface_guidelines_document()
 
     @mcp.tool()
     def devices_list() -> list[dict[str, Any]]:
@@ -63,8 +71,13 @@ def build_mcp(service: SpatialService) -> FastMCP:
         }
 
     @mcp.tool()
-    def surface_put(files: list[dict[str, str]]) -> dict[str, Any]:
-        """Validate and store UTF-8 surface files without activating them."""
+    def surface_put(files: list[dict[str, str]], guidelines_sha256: str) -> dict[str, Any]:
+        """Validate authored files after acknowledging the current canonical UI guide."""
+        if guidelines_sha256 != surface_guidelines_document()["sha256"]:
+            raise ValueError(
+                "guidelines_sha256 is missing or stale; call surface_guidelines_get "
+                "before authoring"
+            )
         return service.put_surface(files)
 
     @mcp.tool()

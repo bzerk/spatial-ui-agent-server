@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .guidelines import surface_guidelines_metadata
+
 MAX_FILES = 127
 MAX_BYTES = 8 * 1024 * 1024
 VIEWPORT = {
@@ -153,6 +155,7 @@ def package_surface(source: Path, destination: Path, source_name: str) -> Surfac
             "cameraStill": True,
             "cameraStream": "best-effort",
         },
+        "designGuidelines": surface_guidelines_metadata(),
         "viewport": VIEWPORT,
     }
     canonical = json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()
